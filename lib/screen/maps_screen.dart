@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:api_places/api/geoapify.dart';
 import 'package:api_places/models/category_model.dart';
-import 'package:api_places/views/category_selector.dart';
+import 'package:api_places/utils/categories.dart';
 import 'package:api_places/views/permiso_denegado.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -70,17 +70,72 @@ class MapSampleState extends State<MapSample> {
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          backgroundColor: Colors.white,
           isScrollControlled: true,
-          builder: (context) {
-            return CategorySelector(
-              categories: _categories,
-              categoryIcons: _categoryIcons,
-              onCategorySelected: (value) {
-                setState(() {
-                  _selectedCategory = value;
-                });
-                _geoApify();
+          backgroundColor: Colors.white,
+          builder: (_) {
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.6,
+              minChildSize: 0.4,
+              maxChildSize: 0.95,
+              builder: (_, controller) {
+                return Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        'Lugares Populares Cercanos',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: controller,
+                        itemCount: _places.length,
+                        itemBuilder: (_, index) {
+                          final place = _places[index];
+                          final name =
+                              place.properties?.name?.isNotEmpty == true
+                                  ? place.properties!.name!
+                                  : 'Sin nombre';
+                          final subtitle = place.properties?.formatted ?? '';
+                          final coordinates = place.geometry?.coordinates;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            child: Card(
+                              elevation: 3,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ListTile(
+                                leading: Icon(
+                                  categoryIcons[_selectedCategory] ??
+                                      Icons.place,
+                                  color: Colors.deepPurple,
+                                ),
+                                title: Text(name),
+                                subtitle: Text(subtitle),
+                                trailing: const Icon(Icons.arrow_forward_ios,
+                                    size: 16),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  if (coordinates != null &&
+                                      coordinates.length >= 2) {
+                                    _goToPlace(coordinates[1], coordinates[0]);
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
               },
             );
           },
@@ -155,7 +210,7 @@ class MapSampleState extends State<MapSample> {
                             crossAxisSpacing: 8,
                             mainAxisSpacing: 8,
                             childAspectRatio: 3,
-                            children: _categories.map((category) {
+                            children: categories.map((category) {
                               return _buildCategoryTile(
                                   category['label']!, category['value']!);
                             }).toList(),
@@ -183,72 +238,6 @@ class MapSampleState extends State<MapSample> {
     );
   }
 
-  final List<Map<String, String>> _categories = [
-    {'label': 'Salud', 'value': 'healthcare'},
-    {'label': 'Alojamiento', 'value': 'accommodation'},
-    {'label': 'Actividades', 'value': 'activity'},
-    {'label': 'Aeropuertos', 'value': 'airport'},
-    {'label': 'Restaurantes', 'value': 'catering.restaurant'},
-    {'label': 'Comida Rapida', 'value': 'catering.fast_food'},
-    {'label': 'Educación', 'value': 'education'},
-    {'label': 'Infantil', 'value': 'childcare'},
-    {'label': 'Entretenimiento', 'value': 'entertainment'},
-    {'label': 'Carreteras', 'value': 'highway'},
-    {'label': 'Ocio', 'value': 'leisure'},
-    {'label': 'Hecho por el Hombre', 'value': 'man_made'},
-    {'label': 'Natural', 'value': 'natural'},
-    {'label': 'Oficina', 'value': 'office'},
-    {'label': 'Estacionamiento', 'value': 'parking'},
-    {'label': 'Mascotas', 'value': 'pet'},
-    {'label': 'Energía', 'value': 'power'},
-    {'label': 'Producción', 'value': 'production'},
-    {'label': 'Ferrocarril', 'value': 'railway'},
-    {'label': 'Alquiler', 'value': 'rental'},
-    {'label': 'Servicio', 'value': 'service'},
-    {'label': 'Turismo', 'value': 'tourism'},
-    {'label': 'Religión', 'value': 'religion'},
-    {'label': 'Camping', 'value': 'camping'},
-    {'label': 'Amenidad', 'value': 'amenity'},
-    {'label': 'Playa', 'value': 'beach'},
-    {'label': 'Adulto', 'value': 'adult'},
-    {'label': 'Edificio', 'value': 'building'},
-    {'label': 'Deportivo', 'value': 'sport'},
-    {'label': 'Transporte Publico', 'value': 'public_transport'},
-  ];
-
-  final Map<String, IconData> _categoryIcons = {
-    'healthcare': Icons.local_hospital,
-    'accommodation': Icons.hotel,
-    'activity': Icons.directions_run,
-    'airport': Icons.flight,
-    'catering.restaurant': Icons.restaurant,
-    'catering.fast_food': Icons.fastfood,
-    'education': Icons.school,
-    'childcare': Icons.child_friendly,
-    'entertainment': Icons.movie,
-    'highway': Icons.directions_car_filled,
-    'leisure': Icons.pool,
-    'man_made': Icons.handyman_outlined,
-    'natural': Icons.park,
-    'office': Icons.business,
-    'parking': Icons.local_parking,
-    'pet': Icons.pets,
-    'power': Icons.bolt,
-    'production': Icons.factory,
-    'railway': Icons.train,
-    'rental': Icons.place,
-    'service': Icons.room_service,
-    'tourism': Icons.camera_alt,
-    'religion': Icons.church,
-    'camping': Icons.terrain,
-    'amenity': Icons.local_cafe,
-    'beach': Icons.beach_access,
-    'adult': Icons.explicit,
-    'building': Icons.location_city,
-    'sport': Icons.sports_soccer,
-    'public_transport': Icons.directions_bus,
-  };
-
   Widget _buildCategoryTile(String label, String value) {
     return GestureDetector(
       onTap: () {
@@ -268,7 +257,7 @@ class MapSampleState extends State<MapSample> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _categoryIcons[value] ?? Icons.category,
+              categoryIcons[value] ?? Icons.category,
               color: Colors.white,
               size: 20,
             ),
