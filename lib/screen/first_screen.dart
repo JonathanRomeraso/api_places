@@ -31,7 +31,6 @@ class FirstScreen extends StatelessWidget {
                       Navigator.of(context).pop();
                       Navigator.pushNamed(context, '/map');
                     });
-                    //Prueba de loading
                     return Center(child: CircularProgressIndicator());
                   },
                 );

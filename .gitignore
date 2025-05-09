@@ -53,6 +53,6 @@ app.*.map.json
 /web/
 .pubspec.lock
 /lib/firebase_options.dart
-/lib/utils/keys.dart
+/lib/utils/key.dart
 pubspec.lock
 /pubspec.lock
