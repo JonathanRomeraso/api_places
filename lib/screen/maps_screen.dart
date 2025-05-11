@@ -1,13 +1,15 @@
 import 'dart:async';
-
+import 'package:api_places/views/select_categories.dart';
+import 'package:api_places/views/icon_map.dart';
+import 'package:api_places/views/places_found.dart';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:api_places/api/geoapify.dart';
 import 'package:api_places/models/category_model.dart';
 import 'package:api_places/utils/categories.dart';
 import 'package:api_places/views/permiso_denegado.dart';
-import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:geolocator/geolocator.dart';
 
 class MapSample extends StatefulWidget {
   const MapSample({super.key});
@@ -19,41 +21,50 @@ class MapSample extends StatefulWidget {
 class MapSampleState extends State<MapSample> {
   final Completer<GoogleMapController> _controller =
       Completer<GoogleMapController>();
-  LatLng? _currentPosition;
+  LatLng? _posicion;
   bool _permissionDenied = false;
   List<CategoryModel> _places = [];
   String _selectedCategory = "healthcare";
+  BitmapDescriptor customIcon = BitmapDescriptor.defaultMarker;
+  MapType mapType = MapType.hybrid;
 
   @override
   void initState() {
     super.initState();
-    _permisosLocalizacion();
+    _permisos();
   }
 
-  Future<void> _permisosLocalizacion() async {
+  Future<void> _customIcon() async {
+    customIcon = await iconMap(
+      categories
+          .firstWhere(
+            (cat) => cat.value == _selectedCategory,
+            orElse: () => Category(label: '', value: '', icon: Icons.place),
+          )
+          .icon,
+      Colors.deepPurpleAccent[400]!,
+      30,
+    );
+  }
+
+  Future<void> _permisos() async {
     var status = await Permission.location.request();
     if (status.isGranted) {
       try {
         Position posicion = await Geolocator.getCurrentPosition(
             desiredAccuracy: LocationAccuracy.high);
         setState(() {
-          _currentPosition = LatLng(posicion.latitude, posicion.longitude);
+          _posicion = LatLng(posicion.latitude, posicion.longitude);
         });
-
-        final GoogleMapController controller = await _controller.future;
+        final controller = await _controller.future;
         controller.animateCamera(CameraUpdate.newCameraPosition(
-          CameraPosition(target: _currentPosition!, zoom: 15),
+          CameraPosition(target: _posicion!, zoom: 15),
         ));
       } catch (e) {
-        debugPrint("Error al obtener la ubicación");
-        setState(() {
-          _permissionDenied = true;
-        });
+        setState(() => _permissionDenied = true);
       }
     } else if (status.isDenied || status.isPermanentlyDenied) {
-      setState(() {
-        _permissionDenied = true;
-      });
+      setState(() => _permissionDenied = true);
     }
   }
 
@@ -61,95 +72,19 @@ class MapSampleState extends State<MapSample> {
     try {
       final api = PopularApi();
       final results = await api.getGeoApify(_selectedCategory);
+      final label = categories
+          .firstWhere(
+            (cat) => cat.value == _selectedCategory,
+            orElse: () => Category(
+              label: 'Desconocido',
+              value: '',
+              icon: Icons.place,
+            ),
+          )
+          .label;
       if (results != null) {
-        setState(() {
-          _places = results;
-        });
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          isScrollControlled: true,
-          backgroundColor: Colors.white,
-          builder: (_) {
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: 0.6,
-              minChildSize: 0.4,
-              maxChildSize: 0.95,
-              builder: (_, controller) {
-                return Column(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text(
-                        'Lugares Populares Cercanos',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-
-                      child: 
-                      (_places.isEmpty)?
-                       const Center(
-                          child: Text(
-                            'No se encontraron lugares cercanos',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        )
-                      :                        
-                      ListView.builder(
-                        controller: controller,
-                        itemCount: _places.length,
-                        itemBuilder: (_, index) {
-                          final place = _places[index];
-                          final name =
-                              place.properties?.name?.isNotEmpty == true
-                                  ? place.properties!.name!
-                                  : 'Sin nombre';
-                          final subtitle = place.properties?.formatted ?? '';
-                          final coordinates = place.geometry?.coordinates;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            child: Card(
-                              elevation: 3,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                leading: Icon(
-                                  categoryIcons[_selectedCategory] ??
-                                      Icons.place,
-                                  color: Colors.deepPurple,
-                                ),
-                                title: Text(name),
-                                subtitle: Text(subtitle),
-                                trailing: const Icon(Icons.arrow_forward_ios,
-                                    size: 16),
-                                onTap: () {
-                                  Navigator.pop(context);
-                                  if (coordinates != null &&
-                                      coordinates.length >= 2) {
-                                    _goToPlace(coordinates[1], coordinates[0]);
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
-        );
+        setState(() => _places = results);
+        placesFound(context, _places, _selectedCategory, _goPlace, label);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -158,8 +93,8 @@ class MapSampleState extends State<MapSample> {
     }
   }
 
-  Future<void> _goToPlace(double lat, double lng) async {
-    final GoogleMapController controller = await _controller.future;
+  Future<void> _goPlace(double lat, double lng) async {
+    final controller = await _controller.future;
     await controller.animateCamera(CameraUpdate.newCameraPosition(
       CameraPosition(target: LatLng(lat, lng), zoom: 17),
     ));
@@ -167,127 +102,136 @@ class MapSampleState extends State<MapSample> {
 
   @override
   Widget build(BuildContext context) {
-    if (_permissionDenied) {
-      return perimisoDenegado();
-    }
+    if (_permissionDenied) return perimisoDenegado();
     return Scaffold(
-      body: _currentPosition == null
+      body: _posicion == null
           ? const Center(child: CircularProgressIndicator())
           : GoogleMap(
-              mapType: MapType.hybrid,
-              initialCameraPosition: CameraPosition(
-                target: _currentPosition!,
-                zoom: 17,
-              ),
+              mapType: mapType,
+              zoomControlsEnabled: false,
+              initialCameraPosition:
+                  CameraPosition(target: _posicion!, zoom: 17),
               myLocationEnabled: true,
-              onMapCreated: (GoogleMapController controller) {
-                _controller.complete(controller);
-              },
+              onMapCreated: (controller) => _controller.complete(controller),
               markers: _places.map((place) {
                 return Marker(
-                  markerId: MarkerId(place.properties!.placeId ?? ''),
-                  position: LatLng(place.geometry!.coordinates![1],
-                      place.geometry!.coordinates![0]),
-                  infoWindow: InfoWindow(title: place.properties!.name),
-                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueBlue),
+                  markerId: MarkerId(place.properties?.placeId ?? ''),
+                  position: LatLng(
+                    place.geometry!.coordinates![1],
+                    place.geometry!.coordinates![0],
+                  ),
+                  infoWindow: InfoWindow(
+                    title: place.properties?.name?.isNotEmpty == true
+                        ? place.properties!.name!
+                        : 'Sin nombre',
+                    snippet: [
+                      place.properties?.street,
+                      place.properties?.suburb,
+                    ].where((element) => element != null).join(", "),
+                  ),
+                  icon: customIcon,
                 );
               }).toSet(),
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            backgroundColor: Colors.white,
-            isScrollControlled: true,
-            builder: (context) {
-              return DraggableScrollableSheet(
-                expand: false,
-                builder: (context, scrollController) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        Text("Selecciona una categoría",
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 10),
-                        Expanded(
-                          child: GridView.count(
-                            controller: scrollController,
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 8,
-                            mainAxisSpacing: 8,
-                            childAspectRatio: 3,
-                            children: categories.map((category) {
-                              return _buildCatagories(
-                                  category['label']!, category['value']!);
-                            }).toList(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          );
+          showCategories(context, categories, _selectedCategory, (value) async {
+            setState(() => _selectedCategory = value);
+            await _customIcon();
+            _geoApify();
+          });
         },
-        icon: Icon(Icons.category, color: Colors.white),
-        label: Text("Buscar Categoría",
+        icon: const Icon(Icons.category, color: Colors.white),
+        label: const Text("Buscar Categoría",
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.white)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         backgroundColor: Colors.deepPurple.shade500,
       ),
-    );
-  }
-
-  Widget _buildCatagories(String label, String value) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.pop(context);
-        setState(() {
-          _selectedCategory = value;
-        });
-        _geoApify();
-      },
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: Colors.deepPurple.shade600,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              categoryIcons[value] ?? Icons.category,
-              color: Colors.white,
-              size: 20,
-            ),
-            SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text("Geoapify",
+            style: TextStyle(fontSize: 20, color: Colors.white)),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.deepPurple.shade500,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.map_rounded, color: Colors.white),
+            tooltip: "Tipo de Mapa",
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) {
+                  return AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    backgroundColor: Colors.white,
+                    title: const Text(
+                      "Tipo de Mapa",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.map_outlined,
+                              color: Colors.deepPurple),
+                          title: const Text("Normal"),
+                          onTap: () {
+                            setState(() => mapType = MapType.normal);
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.satellite_alt_rounded,
+                              color: Colors.deepPurple),
+                          title: const Text("Satélite"),
+                          onTap: () {
+                            setState(() => mapType = MapType.satellite);
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.layers_rounded,
+                              color: Colors.deepPurple),
+                          title: const Text("Híbrido"),
+                          onTap: () {
+                            setState(() => mapType = MapType.hybrid);
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.terrain,
+                              color: Colors.deepPurple),
+                          title: const Text("Terreno"),
+                          onTap: () {
+                            setState(() => mapType = MapType.terrain);
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        child: const Text(
+                          "Cerrar",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ),
     );
   }
