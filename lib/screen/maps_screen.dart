@@ -92,7 +92,17 @@ class MapSampleState extends State<MapSample> {
                       ),
                     ),
                     Expanded(
-                      child: ListView.builder(
+
+                      child: 
+                      (_places.isEmpty)?
+                       const Center(
+                          child: Text(
+                            'No se encontraron lugares cercanos',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        )
+                      :                        
+                      ListView.builder(
                         controller: controller,
                         itemCount: _places.length,
                         itemBuilder: (_, index) {
@@ -167,7 +177,7 @@ class MapSampleState extends State<MapSample> {
               mapType: MapType.hybrid,
               initialCameraPosition: CameraPosition(
                 target: _currentPosition!,
-                zoom: 15,
+                zoom: 17,
               ),
               myLocationEnabled: true,
               onMapCreated: (GoogleMapController controller) {
@@ -179,6 +189,8 @@ class MapSampleState extends State<MapSample> {
                   position: LatLng(place.geometry!.coordinates![1],
                       place.geometry!.coordinates![0]),
                   infoWindow: InfoWindow(title: place.properties!.name),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueBlue),
                 );
               }).toSet(),
             ),
@@ -211,7 +223,7 @@ class MapSampleState extends State<MapSample> {
                             mainAxisSpacing: 8,
                             childAspectRatio: 3,
                             children: categories.map((category) {
-                              return _buildCategoryTile(
+                              return _buildCatagories(
                                   category['label']!, category['value']!);
                             }).toList(),
                           ),
@@ -238,7 +250,7 @@ class MapSampleState extends State<MapSample> {
     );
   }
 
-  Widget _buildCategoryTile(String label, String value) {
+  Widget _buildCatagories(String label, String value) {
     return GestureDetector(
       onTap: () {
         Navigator.pop(context);
