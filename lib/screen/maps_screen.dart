@@ -10,6 +10,8 @@ import 'package:api_places/api/geoapify.dart';
 import 'package:api_places/models/category_model.dart';
 import 'package:api_places/utils/categories.dart';
 import 'package:api_places/views/permiso_denegado.dart';
+import 'package:top_snackbar_flutter/custom_snack_bar.dart';
+import 'package:top_snackbar_flutter/top_snack_bar.dart';
 
 class MapSample extends StatefulWidget {
   const MapSample({super.key});
@@ -27,11 +29,18 @@ class MapSampleState extends State<MapSample> {
   String _selectedCategory = "healthcare";
   BitmapDescriptor customIcon = BitmapDescriptor.defaultMarker;
   MapType mapType = MapType.hybrid;
+  LatLng? puntoSeleccionado;
 
   @override
   void initState() {
     super.initState();
     _permisos();
+  }
+
+  void _seleccionar(LatLng position) {
+    setState(() {
+      puntoSeleccionado = position;
+    });
   }
 
   Future<void> _customIcon() async {
@@ -71,7 +80,11 @@ class MapSampleState extends State<MapSample> {
   Future<void> _geoApify() async {
     try {
       final api = PopularApi();
-      final results = await api.getGeoApify(_selectedCategory);
+      final lat = puntoSeleccionado?.latitude ?? _posicion!.latitude;
+      final long = puntoSeleccionado?.longitude ?? _posicion!.longitude;
+
+      final results =
+          await api.getGeoApify(_selectedCategory, lat: long, long: lat);
       final label = categories
           .firstWhere(
             (cat) => cat.value == _selectedCategory,
@@ -83,13 +96,25 @@ class MapSampleState extends State<MapSample> {
           )
           .label;
       if (results != null) {
+        await _customIcon();
         setState(() => _places = results);
         placesFound(context, _places, _selectedCategory, _goPlace, label);
       }
     } catch (e) {
+      showTopSnackBar(
+        animationDuration: Duration(milliseconds: 200),
+        reverseAnimationDuration: Duration(milliseconds: 200),
+        displayDuration: Duration(seconds: 1),
+        Overlay.of(context),
+        CustomSnackBar.info(
+          message: "No se encontraron lugares populares cercanos",
+        ),
+      );
+      /*
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
+      */
     }
   }
 
@@ -109,35 +134,46 @@ class MapSampleState extends State<MapSample> {
           : GoogleMap(
               mapType: mapType,
               zoomControlsEnabled: false,
+              compassEnabled: false,
+              onTap: _seleccionar,
               initialCameraPosition:
                   CameraPosition(target: _posicion!, zoom: 17),
               myLocationEnabled: true,
               onMapCreated: (controller) => _controller.complete(controller),
-              markers: _places.map((place) {
-                return Marker(
-                  markerId: MarkerId(place.properties?.placeId ?? ''),
-                  position: LatLng(
-                    place.geometry!.coordinates![1],
-                    place.geometry!.coordinates![0],
-                  ),
-                  infoWindow: InfoWindow(
-                    title: place.properties?.name?.isNotEmpty == true
-                        ? place.properties!.name!
-                        : 'Sin nombre',
-                    snippet: [
-                      place.properties?.street,
-                      place.properties?.suburb,
-                    ].where((element) => element != null).join(", "),
-                  ),
-                  icon: customIcon,
-                );
-              }).toSet(),
-            ),
+              markers: {
+                  ..._places.map((place) {
+                    return Marker(
+                      markerId: MarkerId(place.properties?.placeId ?? ''),
+                      position: LatLng(
+                        place.geometry!.coordinates![1],
+                        place.geometry!.coordinates![0],
+                      ),
+                      infoWindow: InfoWindow(
+                        title: place.properties?.name?.isNotEmpty == true
+                            ? place.properties!.name!
+                            : 'Sin nombre',
+                        snippet: [
+                          place.properties?.street,
+                          place.properties?.suburb,
+                        ].where((element) => element != null).join(", "),
+                      ),
+                      icon: customIcon,
+                    );
+                  }),
+                  if (puntoSeleccionado != null)
+                    Marker(
+                      markerId: const MarkerId("selected_location"),
+                      position: puntoSeleccionado!,
+                      icon: BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueViolet),
+                      infoWindow:
+                          const InfoWindow(title: "Ubicación seleccionada"),
+                    ),
+                }),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           showCategories(context, categories, _selectedCategory, (value) async {
             setState(() => _selectedCategory = value);
-            await _customIcon();
             _geoApify();
           });
         },

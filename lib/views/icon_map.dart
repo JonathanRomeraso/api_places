@@ -14,8 +14,8 @@ Future<BitmapDescriptor> iconMap(
     ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4);
   final backgroundPaint = Paint()..color = Colors.white;
   final center = Offset(totalSize / 2, totalSize / 2);
-  canvas.drawCircle(center, size / 2 + padding / 2, shadowPaint);
-  canvas.drawCircle(center, size / 2 + padding / 2, backgroundPaint);
+  canvas.drawCircle(center, size /2 + padding / 2, shadowPaint);
+  canvas.drawCircle(center, size / 1.5 + padding / 1.5, backgroundPaint);
 
   final textPainter = TextPainter(textDirection: TextDirection.ltr);
   textPainter.text = TextSpan(
